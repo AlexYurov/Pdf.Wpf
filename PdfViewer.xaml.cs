@@ -586,25 +586,69 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 			}
 		}
 
-		/// <summary>
+		public static readonly DependencyProperty ZoomProperty = DependencyProperty.Register(
+		    "Zoom", typeof (double), typeof (PdfViewer), new PropertyMetadata(1.0, OnZoomPropertyChanged));
+
+	    private static void OnZoomPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+	    {
+	        var c = (PdfViewer) d;
+            c.UpdateDocLayout();
+            c.OnZoomChanged(EventArgs.Empty);
+        }
+
+        /// <summary>
 		/// This property allows you to scale the PDF page. To take effect the <see cref="SizeMode"/> property should be Zoom
 		/// </summary>
-		public float Zoom
-		{
-			get
-			{
-				return _zoom;
-			}
-			set
-			{
-				if (_zoom != value)
-				{
-					_zoom = value;
-					UpdateDocLayout();
-					OnZoomChanged(EventArgs.Empty);
-				}
-			}
-		}
+	    public double Zoom
+	    {
+	        get { return (double) GetValue(ZoomProperty); }
+	        set { SetValue(ZoomProperty, value); }
+	    }
+
+	    public static readonly DependencyProperty ZoomMinProperty = DependencyProperty.Register(
+	        "ZoomMin", typeof (double), typeof (PdfViewer), new PropertyMetadata(0.5, OnZoomMinPropertyChanged));
+
+	    private static void OnZoomMinPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            var c = (PdfViewer)d;
+	        if (c.Zoom < c.ZoomMin)
+	        {
+	            c.Zoom = c.ZoomMin;
+	        }
+        }
+
+	    public double ZoomMin
+	    {
+	        get { return (double) GetValue(ZoomMinProperty); }
+	        set { SetValue(ZoomMinProperty, value); }
+	    }
+
+	    public static readonly DependencyProperty ZoomMaxProperty = DependencyProperty.Register(
+	        "ZoomMax", typeof (double), typeof (PdfViewer), new PropertyMetadata(4.0, OnZoomMaxPropertyChanged));
+
+	    private static void OnZoomMaxPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            var c = (PdfViewer)d;
+            if (c.Zoom > c.ZoomMax)
+            {
+                c.Zoom = c.ZoomMax;
+            }
+        }
+
+	    public double ZoomMax
+	    {
+	        get { return (double) GetValue(ZoomMaxProperty); }
+	        set { SetValue(ZoomMaxProperty, value); }
+	    }
+
+	    public static readonly DependencyProperty ZoomStepProperty = DependencyProperty.Register(
+	        "ZoomStep", typeof (double), typeof (PdfViewer), new PropertyMetadata(0.125));
+
+	    public double ZoomStep
+	    {
+	        get { return (double) GetValue(ZoomStepProperty); }
+	        set { SetValue(ZoomStepProperty, value); }
+	    }
 
 		/// <summary>
 		/// Gets selected text from PdfView control
@@ -1411,6 +1455,14 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 					if (ScrollOwner != null)
 						ScrollOwner.InvalidateScrollInfo();
 				}
+
+			    if (SizeMode != SizeModes.Zoom)
+                {
+                    double w, h;
+                    Pdfium.FPDF_GetPageSizeByIndex(Document.Handle, CurrentIndex, out w, out h);
+                    var renderSize = GetRenderSize(CurrentIndex);
+                    Zoom = (float) (renderSize.Height/h);
+                }
 			}
 
 			if (double.IsInfinity(availableSize.Width)
@@ -1422,7 +1474,7 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 			return availableSize;
 		}
 
-		/// <summary>
+	    /// <summary>
 		/// Called to arrange and size the content of a Control object.
 		/// </summary>
 		/// <param name="finalSize">The computed size that is used to arrange the content.</param>
@@ -1687,7 +1739,25 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 			base.OnKeyUp(e);
 		}
 
-		#endregion
+	    protected override void OnMouseWheel(MouseWheelEventArgs e)
+        {
+            var isCtrlPressed = 
+                (Keyboard.GetKeyStates(Key.LeftCtrl) & KeyStates.Down) > 0 ||
+                (Keyboard.GetKeyStates(Key.RightCtrl) & KeyStates.Down) > 0;
+            if (isCtrlPressed)
+            {
+                if (SizeMode != SizeModes.Zoom)
+                {
+                    SizeMode = SizeModes.Zoom;
+                }
+                var curval = Zoom + ZoomStep * (e.Delta < 0 ? 1 : -1);
+                curval = Math.Min(Math.Max(curval, ZoomMin), ZoomMax);
+                Zoom = (float)curval;
+            }
+            base.OnMouseWheel(e);
+	    }
+
+	    #endregion
 
 		#region protected drawing functuions
 		/// <summary>
