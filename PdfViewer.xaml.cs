@@ -1750,7 +1750,7 @@ namespace Patagames.Pdf.Net.Controls.Wpf
                 {
                     SizeMode = SizeModes.Zoom;
                 }
-                var curval = Zoom + ZoomStep * (e.Delta < 0 ? 1 : -1);
+                var curval = Zoom + ZoomStep * (e.Delta > 0 ? 1 : -1);
                 curval = Math.Min(Math.Max(curval, ZoomMin), ZoomMax);
                 Zoom = (float)curval;
             }
