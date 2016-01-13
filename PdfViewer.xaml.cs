@@ -1474,7 +1474,14 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 			return availableSize;
 		}
 
-	    /// <summary>
+		protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
+		{
+			base.OnRenderSizeChanged(sizeInfo);
+
+			MeasureOverride(sizeInfo.NewSize);
+		}
+
+		/// <summary>
 		/// Called to arrange and size the content of a Control object.
 		/// </summary>
 		/// <param name="finalSize">The computed size that is used to arrange the content.</param>
