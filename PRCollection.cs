@@ -123,7 +123,7 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 		}
 
 		/// <summary>
-		/// Delete page from colection
+		/// Delete page from collection
 		/// </summary>
 		private void PageRemove(PdfPage page)
 		{

@@ -510,7 +510,7 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 							ScrollToPage(_onstartPageIndex);
 						OnDocumentLoaded(EventArgs.Empty);
 					}
-					HasDocument = _document != null;
+					UpdateHasDocument();
 				}
 			}
 		}
@@ -712,7 +712,7 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 		{
 			//
 			var c = (PdfViewer) d;
-			return c.Document != null;
+			return c.Document != null && c.Document.Pages.Count > 0;
 		}
 
 		private static void OnHasDocumentPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -2296,6 +2296,12 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 		#endregion
 
 		#region Private methods
+
+		private void UpdateHasDocument()
+		{
+			HasDocument = Document != null && Document.Pages.Count > 0;
+		}
+
 		private void ProcessLinkClicked(PdfLink pdfLink, PdfWebLink webLink)
 		{
 			var args = new PdfBeforeLinkClickedEventArgs(webLink, pdfLink);
@@ -2967,19 +2973,21 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 
 		void Pages_CurrentPageChanged(object sender, EventArgs e)
 		{
+			UpdateHasDocument();
 			OnCurrentPageChanged(EventArgs.Empty);
 			InvalidateVisual();
 		}
 
 		void Pages_PageInserted(object sender, PageCollectionChangedEventArgs e)
 		{
+			UpdateHasDocument();
 			UpdateDocLayout();
 		}
 
 		void Pages_PageDeleted(object sender, PageCollectionChangedEventArgs e)
 		{
+			UpdateHasDocument();
 			UpdateDocLayout();
-
 		}
 		#endregion
 
