@@ -4,6 +4,7 @@ using Patagames.Pdf.Net.Exceptions;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -53,6 +54,9 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 		private RenderFlags _renderFlags = RenderFlags.FPDF_LCD_TEXT | RenderFlags.FPDF_NO_CATCH;
 		private int _tilesCount;
 		private MouseModes _mouseMode;
+		private bool _showLoadingIcon = true;
+		private bool _useProgressiveRender = true;
+		private string _loadingIconText = Properties.Resources.LoadingText;
 
 
 		private Rect[] _renderRects;
@@ -64,8 +68,11 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 		private Point _autoScrollPosition = new Point(0, 0);
 		private bool _isProgrammaticallyFocusSetted=false;
 
-		PdfPage _invalidatePage = null;
-		FS_RECTF _invalidateRect;
+		private PdfPage _invalidatePage = null;
+		private FS_RECTF _invalidateRect;
+
+		private PRCollection _prPages = new PRCollection();
+		private System.Windows.Threading.DispatcherTimer _invalidateTimer = null;
 		#endregion
 
 		#region Events
@@ -183,6 +190,22 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 		/// Occurs when the value of the <see cref="MouseModes"/> property has changed.
 		/// </summary>
 		public event EventHandler MouseModeChanged;
+
+		/// <summary>
+		/// Occurs when the value of the <see cref="ShowLoadingIcon"/> property has changed.
+		/// </summary>
+		public event EventHandler ShowLoadingIconChanged;
+
+		/// <summary>
+		/// Occurs when the value of the <see cref="UseProgressiveRender"/> property has changed.
+		/// </summary>
+		public event EventHandler UseProgressiveRenderChanged;
+
+		/// <summary>
+		/// Occurs when the value of the <see cref="LoadingIconText"/> property has changed.
+		/// </summary>
+		public event EventHandler LoadingIconTextChanged;
+
 
 		#endregion
 
@@ -419,6 +442,35 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 			if (MouseModeChanged != null)
 				MouseModeChanged(this, e);
 		}
+		/// <summary>
+		/// Raises the <see cref="ShowLoadingIconChanged"/> event.
+		/// </summary>
+		/// <param name="e">An System.EventArgs that contains the event data.</param>
+		protected virtual void OnShowLoadingIconChanged(EventArgs e)
+		{
+			if (ShowLoadingIconChanged != null)
+				ShowLoadingIconChanged(this, e);
+		}
+
+		/// <summary>
+		/// Raises the <see cref="UseProgressiveRenderChanged"/> event.
+		/// </summary>
+		/// <param name="e">An System.EventArgs that contains the event data.</param>
+		protected virtual void OnUseProgressiveRenderChanged(EventArgs e)
+		{
+			if (UseProgressiveRenderChanged != null)
+				UseProgressiveRenderChanged(this, e);
+		}
+
+		/// <summary>
+		/// Raises the <see cref="LoadingIconTextChanged"/> event.
+		/// </summary>
+		/// <param name="e">An System.EventArgs that contains the event data.</param>
+		protected virtual void OnLoadingIconTextChanged(EventArgs e)
+		{
+			if (LoadingIconTextChanged != null)
+				LoadingIconTextChanged(this, e);
+		}
 		#endregion
 
 		#region Public properties
@@ -452,8 +504,10 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 						_document.Pages.CurrentPageChanged += Pages_CurrentPageChanged;
 						_document.Pages.PageInserted += Pages_PageInserted;
 						_document.Pages.PageDeleted += Pages_PageDeleted;
+						_document.Pages.ProgressiveRender += Pages_ProgressiveRender;
 						SetCurrentPage(_onstartPageIndex);
-						ScrollToPage(_onstartPageIndex);
+						if (_document.Pages.Count > 0)
+							ScrollToPage(_onstartPageIndex);
 						OnDocumentLoaded(EventArgs.Empty);
 					}
 					HasDocument = _document != null;
@@ -950,6 +1004,63 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 				}
 			}
 		}
+
+		/// <summary>
+		/// Determines whether the page's loading icon should be shown
+		/// </summary>
+		public bool ShowLoadingIcon
+		{
+			get
+			{
+				return _showLoadingIcon;
+			}
+			set
+			{
+				if (_showLoadingIcon != value)
+				{
+					_showLoadingIcon = value;
+					OnShowLoadingIconChanged(EventArgs.Empty);
+				}
+			}
+		}
+
+		/// <summary>
+		/// If true the progressive rendering is used for render page
+		/// </summary>
+		public bool UseProgressiveRender
+		{
+			get
+			{
+				return _useProgressiveRender;
+			}
+			set
+			{
+				if (_useProgressiveRender != value)
+				{
+					_useProgressiveRender = value;
+					OnUseProgressiveRenderChanged(EventArgs.Empty);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Gets or sets loading icon text in progressive rendering mode
+		/// </summary>
+		public string LoadingIconText
+		{
+			get
+			{
+				return _loadingIconText;
+			}
+			set
+			{
+				if (_loadingIconText != value)
+				{
+					_loadingIconText = value;
+					OnLoadingIconTextChanged(EventArgs.Empty);
+				}
+			}
+		}
 		#endregion
 
 		#region Public methods
@@ -1292,6 +1403,7 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 				_document.Pages.CurrentPageChanged += Pages_CurrentPageChanged;
 				_document.Pages.PageInserted += Pages_PageInserted;
 				_document.Pages.PageDeleted += Pages_PageDeleted;
+				_document.Pages.ProgressiveRender += Pages_ProgressiveRender;
 				SetCurrentPage(_onstartPageIndex);
 				ScrollToPage(_onstartPageIndex);
 				OnDocumentLoaded(EventArgs.Empty);
@@ -1330,6 +1442,7 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 				_document.Pages.CurrentPageChanged += Pages_CurrentPageChanged;
 				_document.Pages.PageInserted += Pages_PageInserted;
 				_document.Pages.PageDeleted += Pages_PageDeleted;
+				_document.Pages.ProgressiveRender += Pages_ProgressiveRender;
 				SetCurrentPage(_onstartPageIndex);
 				ScrollToPage(_onstartPageIndex);
 				OnDocumentLoaded(EventArgs.Empty);
@@ -1368,6 +1481,7 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 				_document.Pages.CurrentPageChanged += Pages_CurrentPageChanged;
 				_document.Pages.PageInserted += Pages_PageInserted;
 				_document.Pages.PageDeleted += Pages_PageDeleted;
+				_document.Pages.ProgressiveRender += Pages_ProgressiveRender;
 				SetCurrentPage(_onstartPageIndex);
 				ScrollToPage(_onstartPageIndex);
 				OnDocumentLoaded(EventArgs.Empty);
@@ -1422,6 +1536,8 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 			PageHAlign = HorizontalAlignment.Center;
 			RenderFlags = RenderFlags.FPDF_ANNOT;
 			TilesCount = 2;
+			ShowLoadingIcon = true;
+			UseProgressiveRender = true;
 
 			InitializeComponent();
 
@@ -1547,8 +1663,15 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 						continue; //Page is invisible. Skip it
 					}
 
+					//Draw page background
+					DrawPageBackColor(drawingContext, actualRect.X, actualRect.Y, actualRect.Width, actualRect.Height);
 					//Draw page
-					DrawPage(drawingContext, Document.Pages[i], actualRect);
+					if (UseProgressiveRender)
+						DrawPage(drawingContext, Document.Pages[i], actualRect);
+					else
+						DrawPageNonProgressive(drawingContext, Document.Pages[i], actualRect);
+					//Draw page border
+					DrawPageBorder(drawingContext, actualRect);
 					//Draw fillforms selection
 					DrawFillFormsSelection(drawingContext);
 					//Draw text highlight
@@ -1725,10 +1848,12 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 		}
 
 		/// <summary>
-		/// Raises the System.Windows.Forms.Control.KeyDown event.
+		/// Invoked when an unhandled System.Windows.Input.Keyboard.PreviewKeyDown attached
+		/// event reaches an element in its route that is derived from this class. Implement
+		///  this method to add class handling for this event.
 		/// </summary>
-		/// <param name="e">A System.Windows.Forms.KeyEventArgs that contains the event data.</param>
-		protected override void OnKeyDown(KeyEventArgs e)
+		/// <param name="e">The System.Windows.Input.KeyEventArgs that contains the event data.</param>
+		protected override void OnPreviewKeyDown(KeyEventArgs e)
 		{
 			if (Document != null)
 			{
@@ -1743,9 +1868,10 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 				if (Keyboard.IsKeyDown(Key.LeftAlt) || Keyboard.IsKeyDown(Key.RightAlt))
 					mod |= KeyboardModifiers.AltKey;
 
-				Document.Pages.CurrentPage.OnKeyDown(formsKey, mod);
+				if(Document.Pages.CurrentPage.OnKeyDown(formsKey, mod))
+					e.Handled = true;
 			}
-			base.OnKeyDown(e);
+			base.OnPreviewKeyDown(e);
 		}
 
 		/// <summary>
@@ -1792,14 +1918,18 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 		/// <summary>
 		/// Draws page background
 		/// </summary>
-		/// <param name="bmp"><see cref="PdfBitmap"/> object</param>
+		/// <param name="drawingContext">Drawing surface</param>
+		/// <param name="x">Actual X position of the page</param>
+		/// <param name="y">Actual Y position of the page</param>
 		/// <param name="width">Actual width of the page</param>
 		/// <param name="height">Actual height of the page</param>
 		/// <remarks>
 		/// Full page rendering is performed in the following order:
 		/// <list type="bullet">
 		/// <item><see cref="DrawPageBackColor"/></item>
-		/// <item><see cref="DrawPage"/></item>
+		/// <item><see cref="DrawPage"/> / <see cref="DrawLoadingIcon"/></item>
+		/// <item><see cref="DrawFillForms"/></item>
+		/// <item><see cref="DrawPageBorder"/></item>
 		/// <item><see cref="DrawFillFormsSelection"/></item>
 		/// <item><see cref="DrawTextHighlight"/></item>
 		/// <item><see cref="DrawTextSelection"/></item>
@@ -1807,9 +1937,10 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 		/// <item><see cref="DrawPageSeparators"/></item>
 		/// </list>
 		/// </remarks>
-		protected virtual void DrawPageBackColor(PdfBitmap bmp, int width, int height)
+		protected virtual void DrawPageBackColor(DrawingContext drawingContext, double x, double y, double width, double height)
 		{
-			bmp.FillRectEx(0, 0, width, height, Helpers.ToArgb(PageBackColor));
+			Rect rect = new Rect(x, y, width, height);
+			Helpers.FillRectangle(drawingContext, Helpers.CreateBrush(_pageBackColor), rect);
 		}
 
 		/// <summary>
@@ -1822,7 +1953,9 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 		/// Full page rendering is performed in the following order:
 		/// <list type="bullet">
 		/// <item><see cref="DrawPageBackColor"/></item>
-		/// <item><see cref="DrawPage"/></item>
+		/// <item><see cref="DrawPage"/> / <see cref="DrawLoadingIcon"/></item>
+		/// <item><see cref="DrawFillForms"/></item>
+		/// <item><see cref="DrawPageBorder"/></item>
 		/// <item><see cref="DrawFillFormsSelection"/></item>
 		/// <item><see cref="DrawTextHighlight"/></item>
 		/// <item><see cref="DrawTextSelection"/></item>
@@ -1834,31 +1967,163 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 		{
 			if (actualRect.Width <= 0 || actualRect.Height <= 0)
 				return;
-			using (PdfBitmap bmp = new PdfBitmap((int)actualRect.Width, (int)actualRect.Height, true))
-			{
-				//Draw background to bitmap
-				DrawPageBackColor(bmp, (int)actualRect.Width, (int)actualRect.Height);
-
-				//Draw page content to bitmap
-				page.RenderEx(bmp, 0, 0, (int)actualRect.Width, (int)actualRect.Height, PageRotation(page), RenderFlags);
-
-				if (_invalidatePage != null && _invalidatePage == page)
-				{
-					int pt1X, pt2X, pt1Y, pt2Y;
-					page.PageToDeviceEx(0, 0, (int)actualRect.Width, (int)actualRect.Height, PageRotation(page), _invalidateRect.left, _invalidateRect.top, out pt1X, out pt1Y);
-					page.PageToDeviceEx(0, 0, (int)actualRect.Width, (int)actualRect.Height, PageRotation(page), _invalidateRect.right, _invalidateRect.bottom, out pt2X, out pt2Y);
-					bmp.FillRectEx(pt1X, pt1Y, pt2X - pt1X, pt2Y - pt1Y, Helpers.ToArgb(PageBackColor));
-				}
-
-				//Draw fillforms to bitmap
-				page.RenderForms(bmp, 0, 0, (int)actualRect.Width, (int)actualRect.Height, PageRotation(page), RenderFlags);
+			PdfBitmap bmp = _prPages.RenderPage(page, actualRect, PageRotation(page), RenderFlags);
+			if (bmp != null)
+			{ 
+				//Draw fill forms
+				DrawFillForms(bmp, page, actualRect, _invalidatePage != null && _invalidatePage == page, _invalidateRect.left, _invalidateRect.top, _invalidateRect.right, _invalidateRect.bottom);
 
 				//Draw bitmap to drawing surface
 				Helpers.DrawImageUnscaled(drawingContext, bmp, actualRect.X, actualRect.Y);
-
-				//Draw page border
-				Helpers.DrawRectangle(drawingContext, _pageBorderColorPen, actualRect);
 			}
+			else
+			{
+				if (ShowLoadingIcon)
+					DrawLoadingIcon(drawingContext, page, actualRect);
+				StartInvalidateTimer();
+			}
+		}
+
+		/// <summary>
+		/// Draws page content and fillforms if <see cref="UseProgressiveRender"/> flag is not set
+		/// </summary>
+		/// <param name="drawingContext">The drawing instructions for a specific element. This context is provided to the layout system.</param>
+		/// <param name="page">Page to be drawn</param>
+		/// <param name="actualRect">Page bounds in control coordinates</param>
+		/// <remarks>
+		/// Full page rendering is performed in the following order:
+		/// <list type="bullet">
+		/// <item><see cref="DrawPageBackColor"/></item>
+		/// <item><see cref="DrawPage"/> / <see cref="DrawLoadingIcon"/></item>
+		/// <item><see cref="DrawFillForms"/></item>
+		/// <item><see cref="DrawPageBorder"/></item>
+		/// <item><see cref="DrawFillFormsSelection"/></item>
+		/// <item><see cref="DrawTextHighlight"/></item>
+		/// <item><see cref="DrawTextSelection"/></item>
+		/// <item><see cref="DrawCurrentPageHighlight"/></item>
+		/// <item><see cref="DrawPageSeparators"/></item>
+		/// </list>
+		/// </remarks>
+		private void DrawPageNonProgressive(DrawingContext drawingContext, PdfPage page, Rect actualRect)
+		{
+			if (actualRect.Width <= 0 || actualRect.Height <= 0)
+				return;
+			using (PdfBitmap bmp = new PdfBitmap((int)actualRect.Width, (int)actualRect.Height, true))
+			{
+				//Draw page content to bitmap
+				page.RenderEx(bmp, 0, 0, (int)actualRect.Width, (int)actualRect.Height, PageRotation(page), RenderFlags);
+
+				//Draw fill forms
+				DrawFillForms(bmp, page, actualRect, _invalidatePage != null && _invalidatePage == page, _invalidateRect.left, _invalidateRect.top, _invalidateRect.right, _invalidateRect.bottom);
+
+				//Draw bitmap to drawing surface
+				Helpers.DrawImageUnscaled(drawingContext, bmp, actualRect.X, actualRect.Y);
+			}
+		}
+
+		/// <summary>
+		/// Draw fill forms
+		/// </summary>
+		/// <param name="bmp"><see cref="PdfBitmap"/> object</param>
+		/// <param name="page">Page to be drawn</param>
+		/// <param name="actualRect">Page bounds in control coordinates</param>
+		/// <param name="isNeedDrawBg">Indicates that  the background needs to be drawn behind the forms.</param>
+		/// <param name="bgLeft">The left side of background rectangle</param>
+		/// <param name="bgTop">The top side of background rectangle</param>
+		/// <param name="bgRight">The right side of background rectangle</param>
+		/// <param name="bgBottom">The bottom side of background rectangle</param>
+		/// <remarks>
+		/// Full page rendering is performed in the following order:
+		/// <list type="bullet">
+		/// <item><see cref="DrawPageBackColor"/></item>
+		/// <item><see cref="DrawPage"/> / <see cref="DrawLoadingIcon"/></item>
+		/// <item><see cref="DrawFillForms"/></item>
+		/// <item><see cref="DrawPageBorder"/></item>
+		/// <item><see cref="DrawFillFormsSelection"/></item>
+		/// <item><see cref="DrawTextHighlight"/></item>
+		/// <item><see cref="DrawTextSelection"/></item>
+		/// <item><see cref="DrawCurrentPageHighlight"/></item>
+		/// <item><see cref="DrawPageSeparators"/></item>
+		/// </list>
+		/// </remarks>
+		protected virtual void DrawFillForms(PdfBitmap bmp, PdfPage page, Rect actualRect, bool isNeedDrawBg, float bgLeft, float bgTop, float bgRight, float bgBottom)
+		{
+			if (isNeedDrawBg)
+			{
+				int pt1X, pt2X, pt1Y, pt2Y;
+				page.PageToDeviceEx(0, 0, (int)actualRect.Width, (int)actualRect.Height, PageRotation(page), bgLeft, bgTop, out pt1X, out pt1Y);
+				page.PageToDeviceEx(0, 0, (int)actualRect.Width, (int)actualRect.Height, PageRotation(page), bgRight, bgBottom, out pt2X, out pt2Y);
+				bmp.FillRectEx(pt1X, pt1Y, pt2X - pt1X, pt2Y - pt1Y, Helpers.ToArgb(PageBackColor));
+			}
+
+			//Draw fillforms to bitmap
+			page.RenderForms(bmp, 0, 0, (int)actualRect.Width, (int)actualRect.Height, PageRotation(page), RenderFlags);
+		}
+
+		/// <summary>
+		/// Draw loading icon
+		/// </summary>
+		/// <param name="drawingContext">Drawing surface</param>
+		/// <param name="page">Page to be drawn</param>
+		/// <param name="actualRect">Page bounds in control coordinates</param>
+		/// <remarks>
+		/// Full page rendering is performed in the following order:
+		/// <list type="bullet">
+		/// <item><see cref="DrawPageBackColor"/></item>
+		/// <item><see cref="DrawPage"/> / <see cref="DrawLoadingIcon"/></item>
+		/// <item><see cref="DrawFillForms"/></item>
+		/// <item><see cref="DrawPageBorder"/></item>
+		/// <item><see cref="DrawFillFormsSelection"/></item>
+		/// <item><see cref="DrawTextHighlight"/></item>
+		/// <item><see cref="DrawTextSelection"/></item>
+		/// <item><see cref="DrawCurrentPageHighlight"/></item>
+		/// <item><see cref="DrawPageSeparators"/></item>
+		/// </list>
+		/// </remarks>
+		protected virtual void DrawLoadingIcon(DrawingContext drawingContext, PdfPage page, Rect actualRect)
+		{
+			Typeface tf = new Typeface("Tahoma");
+			var ft = new FormattedText(
+				LoadingIconText,
+				CultureInfo.CurrentCulture, 
+				FlowDirection.LeftToRight, 
+				tf, 14, Brushes.Black);
+			ft.MaxTextWidth = actualRect.Width;
+			ft.MaxTextHeight = actualRect.Height;
+			ft.TextAlignment = TextAlignment.Left;
+
+			double x = (actualRect.Width - ft.Width) / 2 + actualRect.X;
+			if (x < actualRect.X)
+				x = actualRect.X;
+			double y = (actualRect.Height - ft.Height) / 2 + actualRect.Y;
+			if (y < actualRect.Y)
+				y = actualRect.Y;
+			drawingContext.DrawText(ft, new Point(x, y));
+		}
+
+		/// <summary>
+		/// Draws page's border
+		/// </summary>
+		/// <param name="drawingContext">The drawing surface</param>
+		/// <param name="BBox">Page's bounding box</param>
+		/// <remarks>
+		/// Full page rendering is performed in the following order:
+		/// <list type="bullet">
+		/// <item><see cref="DrawPageBackColor"/></item>
+		/// <item><see cref="DrawPage"/> / <see cref="DrawLoadingIcon"/></item>
+		/// <item><see cref="DrawFillForms"/></item>
+		/// <item><see cref="DrawPageBorder"/></item>
+		/// <item><see cref="DrawFillFormsSelection"/></item>
+		/// <item><see cref="DrawTextHighlight"/></item>
+		/// <item><see cref="DrawTextSelection"/></item>
+		/// <item><see cref="DrawCurrentPageHighlight"/></item>
+		/// <item><see cref="DrawPageSeparators"/></item>
+		/// </list>
+		/// </remarks>
+		protected virtual void DrawPageBorder(DrawingContext drawingContext, Rect BBox)
+		{
+			//Draw page border
+			Helpers.DrawRectangle(drawingContext, _pageBorderColorPen, BBox);
 		}
 
 		/// <summary>
@@ -1869,7 +2134,9 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 		/// Full page rendering is performed in the following order:
 		/// <list type="bullet">
 		/// <item><see cref="DrawPageBackColor"/></item>
-		/// <item><see cref="DrawPage"/></item>
+		/// <item><see cref="DrawPage"/> / <see cref="DrawLoadingIcon"/></item>
+		/// <item><see cref="DrawFillForms"/></item>
+		/// <item><see cref="DrawPageBorder"/></item>
 		/// <item><see cref="DrawFillFormsSelection"/></item>
 		/// <item><see cref="DrawTextHighlight"/></item>
 		/// <item><see cref="DrawTextSelection"/></item>
@@ -1893,7 +2160,9 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 		/// Full page rendering is performed in the following order:
 		/// <list type="bullet">
 		/// <item><see cref="DrawPageBackColor"/></item>
-		/// <item><see cref="DrawPage"/></item>
+		/// <item><see cref="DrawPage"/> / <see cref="DrawLoadingIcon"/></item>
+		/// <item><see cref="DrawFillForms"/></item>
+		/// <item><see cref="DrawPageBorder"/></item>
 		/// <item><see cref="DrawFillFormsSelection"/></item>
 		/// <item><see cref="DrawTextHighlight"/></item>
 		/// <item><see cref="DrawTextSelection"/></item>
@@ -1929,7 +2198,9 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 		/// Full page rendering is performed in the following order:
 		/// <list type="bullet">
 		/// <item><see cref="DrawPageBackColor"/></item>
-		/// <item><see cref="DrawPage"/></item>
+		/// <item><see cref="DrawPage"/> / <see cref="DrawLoadingIcon"/></item>
+		/// <item><see cref="DrawFillForms"/></item>
+		/// <item><see cref="DrawPageBorder"/></item>
 		/// <item><see cref="DrawFillFormsSelection"/></item>
 		/// <item><see cref="DrawTextHighlight"/></item>
 		/// <item><see cref="DrawTextSelection"/></item>
@@ -1978,7 +2249,9 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 		/// Full page rendering is performed in the following order:
 		/// <list type="bullet">
 		/// <item><see cref="DrawPageBackColor"/></item>
-		/// <item><see cref="DrawPage"/></item>
+		/// <item><see cref="DrawPage"/> / <see cref="DrawLoadingIcon"/></item>
+		/// <item><see cref="DrawFillForms"/></item>
+		/// <item><see cref="DrawPageBorder"/></item>
 		/// <item><see cref="DrawFillFormsSelection"/></item>
 		/// <item><see cref="DrawTextHighlight"/></item>
 		/// <item><see cref="DrawTextSelection"/></item>
@@ -2004,7 +2277,9 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 		/// Full page rendering is performed in the following order:
 		/// <list type="bullet">
 		/// <item><see cref="DrawPageBackColor"/></item>
-		/// <item><see cref="DrawPage"/></item>
+		/// <item><see cref="DrawPage"/> / <see cref="DrawLoadingIcon"/></item>
+		/// <item><see cref="DrawFillForms"/></item>
+		/// <item><see cref="DrawPageBorder"/></item>
 		/// <item><see cref="DrawFillFormsSelection"/></item>
 		/// <item><see cref="DrawTextHighlight"/></item>
 		/// <item><see cref="DrawTextSelection"/></item>
@@ -2512,6 +2787,25 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 			}
 			return true;
 		}
+
+		private void StartInvalidateTimer()
+		{
+			if (_invalidateTimer != null)
+				return;
+
+			_invalidateTimer = new System.Windows.Threading.DispatcherTimer();
+			_invalidateTimer.Interval = TimeSpan.FromMilliseconds(10);
+			_invalidateTimer.Tick += (s, a) =>
+			{
+				if (!_prPages.IsNeedContinuePaint)
+				{
+					_invalidateTimer.Stop();
+					_invalidateTimer = null;
+				}
+				InvalidateVisual();
+			};
+			_invalidateTimer.Start();
+		}
 		#endregion
 
 		#region FillForms event raises
@@ -2666,6 +2960,11 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 		#endregion
 
 		#region Miscellaneous event handlers
+		private void Pages_ProgressiveRender(object sender, ProgressiveRenderEventArgs e)
+		{
+			e.NeedPause = _prPages.IsNeedPause(sender as PdfPage);
+		}
+
 		void Pages_CurrentPageChanged(object sender, EventArgs e)
 		{
 			OnCurrentPageChanged(EventArgs.Empty);
