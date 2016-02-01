@@ -456,6 +456,7 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 						ScrollToPage(_onstartPageIndex);
 						OnDocumentLoaded(EventArgs.Empty);
 					}
+					HasDocument = _document != null;
 				}
 			}
 		}
@@ -649,6 +650,27 @@ namespace Patagames.Pdf.Net.Controls.Wpf
 	        get { return (double) GetValue(ZoomStepProperty); }
 	        set { SetValue(ZoomStepProperty, value); }
 	    }
+
+		public static readonly DependencyProperty HasDocumentProperty = DependencyProperty.Register(
+			"HasDocument", typeof (bool), typeof (PdfViewer), new PropertyMetadata(false, OnHasDocumentPropertyChanged, OnCoerceHasDocumentValue));
+
+		private static object OnCoerceHasDocumentValue(DependencyObject d, object baseValue)
+		{
+			//
+			var c = (PdfViewer) d;
+			return c.Document != null;
+		}
+
+		private static void OnHasDocumentPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+		{
+			//
+		}
+
+		public bool HasDocument
+		{
+			get { return (bool) GetValue(HasDocumentProperty); }
+			set { SetValue(HasDocumentProperty, value); }
+		}
 
 		/// <summary>
 		/// Gets selected text from PdfView control
